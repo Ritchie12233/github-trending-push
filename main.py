@@ -29,10 +29,10 @@ SEARCH_QUERIES = [
     "https://api.github.com/search/repositories?q=stars:>300+pushed:>21d+topic:machine-learning&sort=stars&order=desc&per_page=10",
     # Python（数据科学生态核心语言）
     "https://api.github.com/search/repositories?q=stars:>500+pushed:>21d+language:python+topic:data-science&sort=stars&order=desc&per_page=10",
-    # CS 基础：算法/数据结构/系统设计（帮助你补计算机基础）
-    "https://api.github.com/search/repositories?q=stars:>500+pushed:>90d+topic:computer-science+topic:algorithms&sort=stars&order=desc&per_page=10",
-    # 学习资源类
-    "https://api.github.com/search/repositories?q=stars:>500+pushed:>90d+topic:awesome+topic:data-science&sort=stars&order=desc&per_page=5",
+    # CS 基础：算法可视化/数据结构教程（帮助你补计算机基础）
+    "https://api.github.com/search/repositories?q=stars:>300+pushed:>90d+topic:algorithms&sort=stars&order=desc&per_page=10",
+    # 学习资源 / awesome-list
+    "https://api.github.com/search/repositories?q=stars:>500+pushed:>90d+topic:awesome-list&sort=stars&order=desc&per_page=5",
 ]
 
 HEADERS = {"User-Agent": "github-trending-push-bot/1.0"}
