@@ -19,21 +19,27 @@ GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")  # 可选，提高 API 限额
 DEEPSEEK_API = "https://api.deepseek.com/v1/chat/completions"
 SERVERCHAN_API = f"https://sctapi.ftqq.com/{SERVERCHAN_SENDKEY}.send"
 
-# 搜索关键词：覆盖 数据科学 + AI/ML + CS 基础 三块
-SEARCH_QUERIES = [
-    # 数据科学 / 机器学习
-    "https://api.github.com/search/repositories?q=stars:>300+pushed:>21d+topic:data-science&sort=stars&order=desc&per_page=15",
-    # 大模型 / NLP
-    "https://api.github.com/search/repositories?q=stars:>200+pushed:>21d+topic:llm+topic:large-language-models&sort=stars&order=desc&per_page=10",
-    # 通用 AI
-    "https://api.github.com/search/repositories?q=stars:>300+pushed:>21d+topic:machine-learning&sort=stars&order=desc&per_page=10",
-    # Python（数据科学生态核心语言）
-    "https://api.github.com/search/repositories?q=stars:>500+pushed:>21d+language:python+topic:data-science&sort=stars&order=desc&per_page=10",
-    # CS 基础：算法可视化/数据结构教程（帮助你补计算机基础）
-    "https://api.github.com/search/repositories?q=stars:>300+pushed:>90d+topic:algorithms&sort=stars&order=desc&per_page=10",
-    # 学习资源 / awesome-list
-    "https://api.github.com/search/repositories?q=stars:>500+pushed:>90d+topic:awesome-list&sort=stars&order=desc&per_page=5",
-]
+def build_search_params():
+    """构建搜索参数列表，使用动态绝对日期（GitHub pushed 不支持相对日期）"""
+    today = datetime.now(timezone.utc)
+    d21 = (today - timedelta(days=21)).strftime("%Y-%m-%d")
+    d30 = (today - timedelta(days=30)).strftime("%Y-%m-%d")
+    d90 = (today - timedelta(days=90)).strftime("%Y-%m-%d")
+
+    return [
+        # 数据科学
+        {"q": f"stars:>300 pushed:>={d21} topic:data-science", "sort": "stars", "order": "desc", "per_page": 15},
+        # LLM / 大模型
+        {"q": f"stars:>200 pushed:>={d21} topic:llm", "sort": "stars", "order": "desc", "per_page": 10},
+        # 机器学习
+        {"q": f"stars:>300 pushed:>={d30} topic:machine-learning", "sort": "stars", "order": "desc", "per_page": 10},
+        # Python 数据科学生态
+        {"q": f"stars:>500 pushed:>={d30} language:python topic:data-science", "sort": "stars", "order": "desc", "per_page": 10},
+        # CS 基础：算法
+        {"q": f"stars:>300 pushed:>={d90} topic:algorithms", "sort": "stars", "order": "desc", "per_page": 10},
+        # awesome-list 学习资源
+        {"q": f"stars:>500 pushed:>={d90} topic:awesome-list", "sort": "stars", "order": "desc", "per_page": 5},
+    ]
 
 HEADERS = {"User-Agent": "github-trending-push-bot/1.0"}
 if GITHUB_TOKEN:
@@ -44,9 +50,11 @@ if GITHUB_TOKEN:
 def fetch_github_repos():
     """合并多个搜索查询的结果，去重后返回"""
     all_repos = {}
-    for url in SEARCH_QUERIES:
+    base_url = "https://api.github.com/search/repositories"
+    for params in build_search_params():
+        desc = params["q"][:60]
         try:
-            resp = requests.get(url, headers=HEADERS, timeout=30)
+            resp = requests.get(base_url, params=params, headers=HEADERS, timeout=30)
             resp.raise_for_status()
             items = resp.json().get("items", [])
             for item in items:
@@ -64,7 +72,7 @@ def fetch_github_repos():
                         "pushed_at": item["pushed_at"],
                         "created_at": item["created_at"],
                     }
-            print(f"  ✓ {url.split('?')[1][:60]}... → {len(items)} 个")
+            print(f"  ✓ {desc}... → {len(items)} 个")
         except requests.RequestException as e:
             print(f"  ✗ 请求失败: {e}")
             continue
