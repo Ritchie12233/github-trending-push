@@ -1,0 +1,11 @@
+# 环境变量（包含密钥，切勿提交）
+.env
+
+# Python
+__pycache__/
+*.pyc
+.DS_Store
+
+# IDE
+.idea/
+.vscode/
