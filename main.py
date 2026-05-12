@@ -1,6 +1,8 @@
-"""GitHub Trending AI/ML 项目每日推送
-每天早上8点自动获取 GitHub 热门 AI/机器学习项目，
+"""GitHub Trending 项目每日推送
+每天早上8点自动获取 GitHub 热门项目（数据科学 + AI/ML + CS基础），
 通过 DeepSeek 智能筛选并生成中文介绍，推送到微信。
+
+目标用户：马来亚大学数据科学研究生，非CS本科背景，需要同时强化计算机基础。
 """
 
 import os
@@ -17,14 +19,20 @@ GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")  # 可选，提高 API 限额
 DEEPSEEK_API = "https://api.deepseek.com/v1/chat/completions"
 SERVERCHAN_API = f"https://sctapi.ftqq.com/{SERVERCHAN_SENDKEY}.send"
 
-# AI/ML 研究方向定制的 GitHub 搜索关键词
+# 搜索关键词：覆盖 数据科学 + AI/ML + CS 基础 三块
 SEARCH_QUERIES = [
-    # 主要：AI/ML 主题
-    "https://api.github.com/search/repositories?q=stars:>300+pushed:>14d+topic:machine-learning+topic:deep-learning&sort=stars&order=desc&per_page=15",
-    # 补充：LLM/NLP 主题
-    "https://api.github.com/search/repositories?q=stars:>200+pushed:>14d+topic:llm+topic:large-language-models&sort=stars&order=desc&per_page=10",
-    # 补充：通用 AI 标签
-    "https://api.github.com/search/repositories?q=stars:>300+pushed:>14d+topic:artificial-intelligence&sort=stars&order=desc&per_page=10",
+    # 数据科学 / 机器学习
+    "https://api.github.com/search/repositories?q=stars:>300+pushed:>21d+topic:data-science&sort=stars&order=desc&per_page=15",
+    # 大模型 / NLP
+    "https://api.github.com/search/repositories?q=stars:>200+pushed:>21d+topic:llm+topic:large-language-models&sort=stars&order=desc&per_page=10",
+    # 通用 AI
+    "https://api.github.com/search/repositories?q=stars:>300+pushed:>21d+topic:machine-learning&sort=stars&order=desc&per_page=10",
+    # Python（数据科学生态核心语言）
+    "https://api.github.com/search/repositories?q=stars:>500+pushed:>21d+language:python+topic:data-science&sort=stars&order=desc&per_page=10",
+    # CS 基础：算法/数据结构/系统设计（帮助你补计算机基础）
+    "https://api.github.com/search/repositories?q=stars:>500+pushed:>90d+topic:computer-science+topic:algorithms&sort=stars&order=desc&per_page=10",
+    # 学习资源类
+    "https://api.github.com/search/repositories?q=stars:>500+pushed:>90d+topic:awesome+topic:data-science&sort=stars&order=desc&per_page=5",
 ]
 
 HEADERS = {"User-Agent": "github-trending-push-bot/1.0"}
@@ -69,29 +77,44 @@ def fetch_github_repos():
 # ── 第二步：DeepSeek 智能筛选 ─────────────────────────────
 def call_deepseek(repos):
     """调用 DeepSeek API 筛选项目并生成中文介绍"""
-    system_prompt = """你是一位专门为 AI/机器学习方向研究生服务的开源项目推荐专家。
-你的任务是从 GitHub 热门项目中筛选出最有学习价值的项目，生成清晰易懂的中文介绍。
+    system_prompt = """你是一位专门为数据科学研究生服务的 GitHub 开源项目推荐专家。
+你的受众是马来亚大学数据科学硕士生，本科非计算机专业，正在同步补充计算机基础知识。
 
-## 筛选规则
-1. 优先推荐与大模型(LLM)、深度学习框架、模型训练/推理/部署、AI Agent、RAG、NLP/CV/多模态相关的项目
-2. 保留适合研究生学习水平的项目：教程、论文复现、实用工具、前沿模型实现
-3. 排除：纯商业产品、已归档项目、无实际代码的awesome-list、面试题仓库
-4. 最终保留恰好 10 个项目
+## 你的受众画像
+- 数据科学方向：机器学习、统计分析、数据可视化、大数据处理
+- 已掌握：Python 基础、pandas/sklearn 等常用库、基本数学统计知识
+- 正在学习：算法与数据结构、系统设计、Linux/命令行、数据库原理、分布式系统基础
+- 兴趣前沿：LLM 大模型应用、RAG、AI Agent、MCP 协议、模型部署
 
-## 输出格式（严格遵循，不要添加多余内容）
+## 筛选规则（重要！）
+每次推送必须同时覆盖三大板块，比例大致为 6:2:2：
+1. **数据科学与 AI（约占6个）**：ML/DL框架、LLM应用、RAG、模型训练与部署、数据分析工具、可视化
+2. **计算机基础入门（约占2个）**：算法可视化、数据结构教程、Linux命令、Git学习、数据库基础、计算机网络图解——必须是适合非CS背景入门的内容
+3. **Python工程与工具（约占2个）**：Python进阶、Web框架（FastAPI/Flask）、Docker入门、命令行工具、生产力工具
+
+## 筛选要求
+- 优先推荐有中文文档或教程的项目
+- 入门项目标注"适合非CS背景"
+- 避免：纯底层系统项目（如Linux内核、编译器等，受众暂时用不上）、纯前端项目
+- 排除：已归档、无实际代码、纯商业、面试题库
+- 每个项目的"一句话介绍"必须说明：做什么 + 研究生能学到什么具体技能
+
+## 输出格式（严格遵循）
 🌟 项目名称
-🔧 技术栈：[编程语言 + 核心框架]
-📚 适合人群：[AI研究生/AI初学者/有经验的研究者]
-📝 一句话介绍：[通俗中文说明项目做什么，研究生能学什么]
+🔧 技术栈：[语言 + 框架]
+📚 适合人群：[数据科学研究生 / 非CS入门 / 有经验者]
+📝 一句话介绍：[做什么 + 学到什么]
 ⭐ Star数：[数字]
 🔗 [项目链接]
 
-...（共10个）
+...（共10个，按板块分组，每组前加小标题）
 
 🎯 今日 Top 3 重点推荐
-1. [项目名]：[为什么 AI 研究生应该关注]
-2. [项目名]：[为什么 AI 研究生应该关注]
-3. [项目名]：[为什么 AI 研究生应该关注]
+1. [项目名]：[为什么数据科学研究生应该关注]
+2. [项目名]：[为什么数据科学研究生应该关注]
+3. [项目名]：[为什么数据科学研究生应该关注]
+
+💡 给非CS背景研究生的学习建议（2-3句话，结合今日推荐给出具体可操作的建议）
 """
 
     payload = {
@@ -99,9 +122,9 @@ def call_deepseek(repos):
         "temperature": 0.3,
         "messages": [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"请分析以下 GitHub 项目数据（JSON 格式），筛选10个最适合 AI/ML 研究生的项目并生成介绍：\n\n{json.dumps(repos, ensure_ascii=False, indent=2)}"},
+            {"role": "user", "content": f"请分析以下 GitHub 项目数据（JSON 格式），为马来亚大学数据科学研究生（非CS本科背景）筛选10个项目。严格按 数据科学+AI(6个)、计算机基础(2个)、Python工程(2个) 的比例分配：\n\n{json.dumps(repos, ensure_ascii=False, indent=2)}"},
         ],
-        "max_tokens": 4096,
+        "max_tokens": 5120,
     }
 
     try:
