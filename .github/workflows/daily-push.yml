@@ -3,7 +3,7 @@ name: GitHub AI/ML Trending 每日推送
 on:
   schedule:
     # UTC 0:00 = 北京时间/KL时间 早上8:00
-    - cron: "0 0 * * *"
+    - cron: "7 0 * * *"
   workflow_dispatch:  # 允许手动触发
     inputs:
       test_mode:
