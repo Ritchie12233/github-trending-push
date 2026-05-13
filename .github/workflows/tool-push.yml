@@ -49,4 +49,5 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add library/
           git diff --staged --quiet || git commit -m "archive: $(TZ='Asia/Kuala_Lumpur' date +%Y-%m-%d) 工具卡归档"
+          git pull --rebase origin main
           git push
