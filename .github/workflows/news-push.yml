@@ -1,0 +1,42 @@
+name: 新闻简报推送（早报+晚报）
+
+on:
+  schedule:
+    # 早报 UTC 23:27 = KL 7:27 AM
+    - cron: "27 23 * * *"
+    # 晚报 UTC 13:27 = KL 9:27 PM
+    - cron: "27 13 * * *"
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: "测试模式"
+        type: boolean
+        default: false
+
+jobs:
+  push:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 安装 Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: 安装依赖
+        run: pip install requests
+
+      - name: 执行推送
+        env:
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          SERVERCHAN_SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.test_mode }}" = "true" ]; then
+            python news.py --test
+          else
+            python news.py
+          fi
