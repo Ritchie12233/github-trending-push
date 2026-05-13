@@ -1,57 +1,91 @@
 """GitHub Trending 项目每日推送
-每天早上8点自动获取 GitHub 热门项目（数据科学 + AI/ML + CS基础），
-通过 DeepSeek 智能筛选并生成中文介绍，推送到微信。
+- 周一至周五：5条精选（3 AI/DS + 1 CS基础 + 1 信息茧房打破器）
+- 周六：本周深度汇总（10条分层 + 趋势分析）
+- 周日：休息，不推送
 
-目标用户：马来亚大学数据科学研究生，非CS本科背景，需要同时强化计算机基础。
+目标用户：马来亚大学数据科学研究生，非CS本科背景。
 """
 
 import os
 import json
 import sys
+import random
 import requests
 from datetime import datetime, timezone, timedelta
 
-# ── 配置：全部从环境变量读取 ──────────────────────────────
+# ── 配置 ──────────────────────────────────────────────────
 DEEPSEEK_API_KEY = os.environ["DEEPSEEK_API_KEY"]
 SERVERCHAN_SENDKEY = os.environ["SERVERCHAN_SENDKEY"]
-GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")  # 可选，提高 API 限额
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
 
 DEEPSEEK_API = "https://api.deepseek.com/v1/chat/completions"
 SERVERCHAN_API = f"https://sctapi.ftqq.com/{SERVERCHAN_SENDKEY}.send"
-
-def build_search_params():
-    """构建搜索参数列表，使用动态绝对日期（GitHub pushed 不支持相对日期）"""
-    today = datetime.now(timezone.utc)
-    d21 = (today - timedelta(days=21)).strftime("%Y-%m-%d")
-    d30 = (today - timedelta(days=30)).strftime("%Y-%m-%d")
-    d90 = (today - timedelta(days=90)).strftime("%Y-%m-%d")
-
-    return [
-        # 数据科学
-        {"q": f"stars:>300 pushed:>={d21} topic:data-science", "sort": "stars", "order": "desc", "per_page": 15},
-        # LLM / 大模型
-        {"q": f"stars:>200 pushed:>={d21} topic:llm", "sort": "stars", "order": "desc", "per_page": 10},
-        # 机器学习
-        {"q": f"stars:>300 pushed:>={d30} topic:machine-learning", "sort": "stars", "order": "desc", "per_page": 10},
-        # Python 数据科学生态
-        {"q": f"stars:>500 pushed:>={d30} language:python topic:data-science", "sort": "stars", "order": "desc", "per_page": 10},
-        # CS 基础：算法
-        {"q": f"stars:>300 pushed:>={d90} topic:algorithms", "sort": "stars", "order": "desc", "per_page": 10},
-        # awesome-list 学习资源
-        {"q": f"stars:>500 pushed:>={d90} topic:awesome-list", "sort": "stars", "order": "desc", "per_page": 5},
-    ]
+KL_TZ = timezone(timedelta(hours=8))
 
 HEADERS = {"User-Agent": "github-trending-push-bot/1.0"}
 if GITHUB_TOKEN:
     HEADERS["Authorization"] = f"Bearer {GITHUB_TOKEN}"
 
 
+# ── 日期工具 ──────────────────────────────────────────────
+def get_day_of_week():
+    """返回 KL 时区的星期几: 0=周一, 6=周日"""
+    return datetime.now(KL_TZ).weekday()
+
+
+def day_name(d):
+    return ["周一", "周二", "周三", "周四", "周五", "周六", "周日"][d]
+
+
+# ── 搜索参数构建 ──────────────────────────────────────────
+
+def build_weekday_search_params():
+    """周一至周五搜索：AI/DS + CS基础 + 随机破圈"""
+    today = datetime.now(timezone.utc)
+    d7 = (today - timedelta(days=7)).strftime("%Y-%m-%d")
+    d14 = (today - timedelta(days=14)).strftime("%Y-%m-%d")
+    d30 = (today - timedelta(days=30)).strftime("%Y-%m-%d")
+
+    return [
+        # AI/DS 板块（3个来源）
+        {"q": f"stars:>300 pushed:>={d7} topic:data-science", "sort": "stars", "order": "desc", "per_page": 10},
+        {"q": f"stars:>200 pushed:>={d7} topic:llm", "sort": "stars", "order": "desc", "per_page": 10},
+        {"q": f"stars:>300 pushed:>={d14} topic:machine-learning", "sort": "stars", "order": "desc", "per_page": 10},
+        # CS 基础
+        {"q": f"stars:>200 pushed:>={d30} topic:algorithms", "sort": "stars", "order": "desc", "per_page": 10},
+        # Python 工具生态
+        {"q": f"stars:>500 pushed:>={d14} language:python topic:data-science", "sort": "stars", "order": "desc", "per_page": 10},
+        # 破圈随机池 — 无主题限制，纯看近期热度（提供20个候选）
+        {"q": f"stars:>1000 pushed:>={d7}", "sort": "stars", "order": "desc", "per_page": 20},
+    ]
+
+
+def build_saturday_search_params():
+    """周六搜索：覆盖一周，更大范围"""
+    today = datetime.now(timezone.utc)
+    d7 = (today - timedelta(days=7)).strftime("%Y-%m-%d")
+    d14 = (today - timedelta(days=14)).strftime("%Y-%m-%d")
+    d30 = (today - timedelta(days=30)).strftime("%Y-%m-%d")
+
+    return [
+        {"q": f"stars:>300 pushed:>={d7} topic:data-science", "sort": "stars", "order": "desc", "per_page": 15},
+        {"q": f"stars:>200 pushed:>={d7} topic:llm", "sort": "stars", "order": "desc", "per_page": 15},
+        {"q": f"stars:>300 pushed:>={d14} topic:machine-learning", "sort": "stars", "order": "desc", "per_page": 15},
+        {"q": f"stars:>500 pushed:>={d14} language:python topic:data-science", "sort": "stars", "order": "desc", "per_page": 10},
+        {"q": f"stars:>200 pushed:>={d30} topic:algorithms", "sort": "stars", "order": "desc", "per_page": 15},
+        {"q": f"stars:>500 pushed:>={d14} topic:awesome-list", "sort": "stars", "order": "desc", "per_page": 10},
+        # 更泛化的破圈池
+        {"q": f"stars:>1000 pushed:>={d7}", "sort": "stars", "order": "desc", "per_page": 25},
+    ]
+
+
 # ── 第一步：获取 GitHub 项目 ──────────────────────────────
-def fetch_github_repos():
-    """合并多个搜索查询的结果，去重后返回"""
+
+def fetch_github_repos(search_params):
+    """合并多个搜索查询，去重后按 star 降序返回"""
     all_repos = {}
     base_url = "https://api.github.com/search/repositories"
-    for params in build_search_params():
+    for params in search_params:
         desc = params["q"][:60]
         try:
             resp = requests.get(base_url, params=params, headers=HEADERS, timeout=30)
@@ -68,7 +102,6 @@ def fetch_github_repos():
                         "language": item.get("language", "未知"),
                         "topics": item.get("topics", []),
                         "forks": item["forks_count"],
-                        "open_issues": item["open_issues_count"],
                         "pushed_at": item["pushed_at"],
                         "created_at": item["created_at"],
                     }
@@ -82,74 +115,166 @@ def fetch_github_repos():
     return repos
 
 
-# ── 第二步：DeepSeek 智能筛选 ─────────────────────────────
-def call_deepseek(repos):
-    """调用 DeepSeek API 筛选项目并生成中文介绍"""
-    system_prompt = """你是一位专门为数据科学研究生服务的 GitHub 开源项目推荐专家。
-你的受众是马来亚大学数据科学硕士生，本科非计算机专业，正在同步补充计算机基础知识。
+# ── 第二步：DeepSeek 筛选（工作日版）──────────────────────
 
-## 你的受众画像
-- 数据科学方向：机器学习、统计分析、数据可视化、大数据处理
-- 已掌握：Python 基础、pandas/sklearn 等常用库、基本数学统计知识
-- 正在学习：算法与数据结构、系统设计、Linux/命令行、数据库原理、分布式系统基础
-- 兴趣前沿：LLM 大模型应用、RAG、AI Agent、MCP 协议、模型部署
+def call_deepseek_weekday(repos):
+    """5 条精选：3 AI/DS + 1 CS基础 + 1 信息茧房打破器"""
 
-## 筛选规则（重要！）
-每次推送必须同时覆盖三大板块，比例大致为 6:2:2：
-1. **数据科学与 AI（约占6个）**：ML/DL框架、LLM应用、RAG、模型训练与部署、数据分析工具、可视化
-2. **计算机基础入门（约占2个）**：算法可视化、数据结构教程、Linux命令、Git学习、数据库基础、计算机网络图解——必须是适合非CS背景入门的内容
-3. **Python工程与工具（约占2个）**：Python进阶、Web框架（FastAPI/Flask）、Docker入门、命令行工具、生产力工具
+    system_prompt = """你是马来亚大学数据科学研究生的专属 GitHub 项目推荐专家。
+受众：非CS本科背景，正在同步补计算机基础，对AI/ML/LLM前沿有浓厚兴趣。
+
+## 推送规则（重要！）
+每天精选恰好5个项目，结构固定：
+1. **AI/数据科学 / LLM 前沿**（3个）—— 与你研究方向直接相关
+2. **计算机基础入门**（1个）—— 算法可视化、Linux/命令行、Git、数据库、网络基础，必须适合非CS背景
+3. **信息茧房打破器**（1个）—— 必须是你受众平时不会主动搜索的方向。例如：
+   - Rust/Go/Zig 写的开发者工具
+   - 游戏引擎/图形学
+   - 生物信息/量化金融等交叉学科
+   - 设计工具/创意编程
+   - 去中心化/P2P/隐私工具
+   - 嵌入式/IoT
+   - 任何新颖的、非AI/DS/Web的优质项目
+   - 排除：纯前端框架、纯商业产品、已过时技术栈
 
 ## 筛选要求
-- 优先推荐有中文文档或教程的项目
-- 入门项目标注"适合非CS背景"
-- 避免：纯底层系统项目（如Linux内核、编译器等，受众暂时用不上）、纯前端项目
-- 排除：已归档、无实际代码、纯商业、面试题库
-- 每个项目的"一句话介绍"必须说明：做什么 + 研究生能学到什么具体技能
+- 每个项目的「一句话介绍」包含：做什么 + 具体能学到什么技能
+- CS基础项目标注「适合非CS背景」
+- 破圈项目说明「你为什么会觉得这东西有意思」
+- 排除：已归档、无实际代码、面试题库
 
-## 输出格式（严格遵循）
+## 输出格式（严格按此模板）
+📅 {date} · 每日 GitHub 精选
+
+━━━━━━━━━━━━━━━━━━
+🤖 AI/数据科学 / LLM 前沿
+━━━━━━━━━━━━━━━━━━
+
 🌟 项目名称
 🔧 技术栈：[语言 + 框架]
-📚 适合人群：[数据科学研究生 / 非CS入门 / 有经验者]
-📝 一句话介绍：[做什么 + 学到什么]
-⭐ Star数：[数字]
-🔗 [项目链接]
+📝 [一句话：做什么 + 学到什么]
+⭐ Star：[数字]  🔗 [链接]
 
-...（共10个，按板块分组，每组前加小标题）
+🌟 项目名称
+🔧 [同上格式]
+📝 [同上]
+⭐ [同上]  🔗 [链接]
 
-🎯 今日 Top 3 重点推荐
-1. [项目名]：[为什么数据科学研究生应该关注]
-2. [项目名]：[为什么数据科学研究生应该关注]
-3. [项目名]：[为什么数据科学研究生应该关注]
+🌟 项目名称
+🔧 [同上格式]
+📝 [同上]
+⭐ [同上]  🔗 [链接]
 
-💡 给非CS背景研究生的学习建议（2-3句话，结合今日推荐给出具体可操作的建议）
+━━━━━━━━━━━━━━━━━━
+🏗️ 计算机基础入门
+━━━━━━━━━━━━━━━━━━
+
+🌟 项目名称
+🔧 [同上格式]
+📝 [同上，标注适合非CS背景]
+⭐ [同上]  🔗 [链接]
+
+━━━━━━━━━━━━━━━━━━
+🫧 信息茧房打破器
+━━━━━━━━━━━━━━━━━━
+
+🌟 项目名称
+🔧 [技术栈]
+📝 [这是什么 + 为什么你可能会感兴趣]
+⭐ [同上]  🔗 [链接]
+💬 为什么推荐：[1句话说明这个领域的价值，以及和你的知识体系可能产生的联系]
 """
 
+    today_str = datetime.now(KL_TZ).strftime("%Y年%m月%d日") + " " + day_name(get_day_of_week())
+    user_prompt = f"""请为 {today_str} 筛选5个项目（3 AI/DS + 1 CS基础 + 1 破圈）。
+项目池如下：
+{json.dumps(repos, ensure_ascii=False, indent=2)}"""
+
+    return _call_deepseek_api(system_prompt.replace("{date}", today_str), user_prompt)
+
+
+# ── 第二步：DeepSeek 筛选（周六汇总版）───────────────────
+
+def call_deepseek_saturday(repos):
+    """周六深度汇总：10条分层 + 趋势分析"""
+
+    system_prompt = """你是马来亚大学数据科学研究生的专属 GitHub 项目推荐专家。
+周六的任务是对本周热门项目进行深度汇总和分层推荐。
+
+## 分层推荐规则
+从本周项目中选出最多10个项目，严格分为三层：
+
+### 第一层：必看 🔥（3个）
+本周最重要的项目。标准：
+- 技术上有突破性或非常实用
+- 与数据科学/AI研究密切相关
+- 能让研究生直接用到学习或研究中
+
+### 第二层：可收藏 📌（4个）
+值得书签保存，但不急着一周内看完：
+- 优质学习资源/教程
+- 有潜力的新项目（star增长快但还不够成熟）
+- 实用的开发工具/效率提升
+
+### 第三层：新人友好 🌱（3个）
+适合非CS背景上手：
+- CS基础相关
+- 有详细文档/教程
+- 门槛低但学到的东西扎实
+
+## 额外要求
+- 最后附一段「📊 本周趋势观察」（3-4句话，总结本周开源社区的值得关注的动向）
+- 附一段「📖 学习建议」（结合本周项目给非CS背景研究生1-2条可操作的建议）
+
+## 输出格式
+📅 {date} 周六 · 本周深度汇总
+
+🔥 必看（3个）
+[每个项目格式同工作日]
+
+📌 可收藏（4个）
+[同上]
+
+🌱 新人友好（3个）
+[同上]
+
+📊 本周趋势观察
+[3-4句话]
+
+📖 学习建议
+[1-2条建议]
+"""
+
+    today_str = datetime.now(KL_TZ).strftime("%Y年%m月%d日") + " 周六"
+    user_prompt = f"请为本周汇总筛选10个项目并分层。项目池（包含本周热门）：\n\n{json.dumps(repos, ensure_ascii=False, indent=2)}"
+
+    return _call_deepseek_api(system_prompt.replace("{date}", today_str), user_prompt, max_tokens=6144)
+
+
+# ── 通用 DeepSeek API 调用 ────────────────────────────────
+
+def _call_deepseek_api(system_prompt, user_prompt, max_tokens=4096):
     payload = {
         "model": "deepseek-chat",
         "temperature": 0.3,
         "messages": [
             {"role": "system", "content": system_prompt},
-            {"role": "user", "content": f"请分析以下 GitHub 项目数据（JSON 格式），为马来亚大学数据科学研究生（非CS本科背景）筛选10个项目。严格按 数据科学+AI(6个)、计算机基础(2个)、Python工程(2个) 的比例分配：\n\n{json.dumps(repos, ensure_ascii=False, indent=2)}"},
+            {"role": "user", "content": user_prompt},
         ],
-        "max_tokens": 5120,
+        "max_tokens": max_tokens,
     }
-
     try:
         resp = requests.post(
             DEEPSEEK_API,
-            headers={
-                "Authorization": f"Bearer {DEEPSEEK_API_KEY}",
-                "Content-Type": "application/json",
-            },
+            headers={"Authorization": f"Bearer {DEEPSEEK_API_KEY}", "Content-Type": "application/json"},
             json=payload,
             timeout=120,
         )
         resp.raise_for_status()
         data = resp.json()
         content = data["choices"][0]["message"]["content"]
-        tokens_used = data.get("usage", {}).get("total_tokens", "未知")
-        print(f"  DeepSeek 返回成功，消耗 tokens: {tokens_used}")
+        tokens = data.get("usage", {}).get("total_tokens", "?")
+        print(f"  DeepSeek 返回成功，消耗 tokens: {tokens}")
         return content
     except requests.RequestException as e:
         print(f"  ✗ DeepSeek API 调用失败: {e}")
@@ -159,25 +284,22 @@ def call_deepseek(repos):
 
 
 # ── 第三步：推送到微信 ────────────────────────────────────
+
 def push_to_wechat(content, test_mode=False):
     """通过 Server酱 推送到微信"""
-    tz = timezone(timedelta(hours=8))
-    today = datetime.now(tz).strftime("%Y年%m月%d日")
+    today = datetime.now(KL_TZ).strftime("%Y年%m月%d日")
     prefix = "🧪 [测试] " if test_mode else ""
-    title = f"{prefix}📦 GitHub AI/ML 热门项目推荐 — {today}"
+    title = f"{prefix}📦 GitHub 项目推荐 — {today}"
 
-    # Server酱 Markdown 格式
-    body = {
-        "title": title,
-        "desp": content.replace("\n", "\n\n"),  # Server酱需要双换行
-    }
+    # Server酱 body
+    body = {"title": title, "desp": content.replace("\n", "\n\n")}
 
     try:
         resp = requests.post(SERVERCHAN_API, data=body, timeout=30)
         resp.raise_for_status()
         result = resp.json()
         if result.get("code") == 0:
-            print(f"  ✓ 微信推送成功")
+            print("  ✓ 微信推送成功")
         else:
             print(f"  ✗ Server酱返回错误: {result}")
             sys.exit(1)
@@ -187,31 +309,51 @@ def push_to_wechat(content, test_mode=False):
 
 
 # ── 主流程 ────────────────────────────────────────────────
+
 def main():
     test_mode = "--test" in sys.argv
-    if test_mode:
-        print("⚠️  测试模式\n")
+    weekday = get_day_of_week()
+    dn = day_name(weekday)
 
-    tz = timezone(timedelta(hours=8))
-    now = datetime.now(tz).strftime("%Y-%m-%d %H:%M (UTC+8)")
-    print(f"🚀 GitHub Trending 推送任务开始 — {now}\n")
+    tz_label = datetime.now(KL_TZ).strftime("%Y-%m-%d %H:%M (UTC+8)")
+    print(f"🚀 GitHub Trending 推送任务 — {dn} {tz_label}")
 
-    # Step 1: 获取项目
-    print("📡 第一步：获取 GitHub AI/ML 热门项目...")
-    repos = fetch_github_repos()
-    if len(repos) < 5:
+    # ── 周日：休息 ──────────────────────────────────────
+    if weekday == 6:
+        print("🌴 今天是周日，休息不推送。明天见！")
+        return
+
+    # ── 周六：深度汇总 ──────────────────────────────────
+    if weekday == 5:
+        print(f"\n📊 {dn} 模式：本周深度汇总（10条分层）")
+        print("\n📡 第一步：获取本周热门项目...")
+        repos = fetch_github_repos(build_saturday_search_params())
+        if len(repos) < 10:
+            print(f"  ⚠️ 项目数量不足 ({len(repos)})，任务终止")
+            sys.exit(1)
+
+        print("\n🤖 第二步：DeepSeek 深度汇总...")
+        ai_content = call_deepseek_saturday(repos)
+
+        print("\n📲 第三步：推送到微信...")
+        push_to_wechat(ai_content, test_mode=test_mode)
+        print(f"\n✅ {dn}汇总推送完成")
+        return
+
+    # ── 周一至周五：5条精选 ─────────────────────────────
+    print(f"\n📋 {dn} 模式：5条精选（3 AI/DS + 1 CS基础 + 1 破圈）")
+    print("\n📡 第一步：获取热门项目...")
+    repos = fetch_github_repos(build_weekday_search_params())
+    if len(repos) < 8:
         print(f"  ⚠️ 项目数量不足 ({len(repos)})，任务终止")
         sys.exit(1)
 
-    # Step 2: AI 筛选
-    print("\n🤖 第二步：DeepSeek 智能筛选...")
-    ai_content = call_deepseek(repos)
+    print("\n🤖 第二步：DeepSeek 精选筛选...")
+    ai_content = call_deepseek_weekday(repos)
 
-    # Step 3: 推送
     print("\n📲 第三步：推送到微信...")
     push_to_wechat(ai_content, test_mode=test_mode)
-
-    print(f"\n✅ 任务完成 — {datetime.now(tz).strftime('%Y-%m-%d %H:%M (UTC+8)')}")
+    print(f"\n✅ {dn}推送完成")
 
 
 if __name__ == "__main__":
