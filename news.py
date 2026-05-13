@@ -147,6 +147,7 @@ def call_deepseek_news(articles, is_morning):
     """调用 DeepSeek 筛选分类，生成中文新闻简报"""
     period = "早报" if is_morning else "晚报"
     time_desc = "昨夜今晨" if is_morning else "今日全天"
+    today_str = datetime.now(KL_TZ).strftime("%Y年%m月%d日") + (" 早" if is_morning else " 晚")
 
     system_prompt = f"""你是马来亚大学数据科学研究生的专属新闻简报编辑。
 受众：在马来西亚留学的中国研究生，对国际政治、战争冲突、科技AI、经济、科学都有浓厚兴趣。
@@ -174,7 +175,7 @@ def call_deepseek_news(articles, is_morning):
 - 如果某个板块今天确实没有重要新闻，可以标「今日无重大新闻」
 
 ## 输出格式
-📰 {period} — {date}
+📰 {period} — {today_str}
 
 📊 今日概览
 [2句话概括今天最值得关注的趋势或事件]
@@ -203,10 +204,9 @@ def call_deepseek_news(articles, is_morning):
 [1-2条对马来西亚中国留学生/数据科学研究生可能有直接影响的新闻或提醒]
 """
 
-    today_str = datetime.now(KL_TZ).strftime("%Y年%m月%d日") + (" 早" if is_morning else " 晚")
     user_prompt = f"请为 {today_str} 筛选并生成新闻简报。原始新闻池（英文为主）：\n\n{json.dumps(articles, ensure_ascii=False, indent=2)}"
 
-    return _call_deepseek(system_prompt.replace("{date}", today_str).replace("{period}", period).replace("{time_desc}", time_desc), user_prompt, max_tokens=5120)
+    return _call_deepseek(system_prompt, user_prompt, max_tokens=5120)
 
 
 def _call_deepseek(system_prompt, user_prompt, max_tokens=4096):
