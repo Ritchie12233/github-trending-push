@@ -1,12 +1,9 @@
-name: GitHub Trending 每日推送
+name: 每日工具卡
 
 on:
   schedule:
-    # 周一至周五 UTC 00:07 = KL 8:07 AM（5条精选）
-    - cron: "7 0 * * 1-5"
-    # 周六 UTC 00:07 = KL 8:07 AM（本周汇总）
-    - cron: "7 0 * * 6"
-    # 周日不推送 — 休息
+    # 周一至周五 UTC 9:27 = KL 5:27 PM
+    - cron: "27 9 * * 1-5"
   workflow_dispatch:
     inputs:
       test_mode:
@@ -20,7 +17,7 @@ permissions:
 jobs:
   push:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 5
 
     steps:
       - name: 检出代码
@@ -38,12 +35,11 @@ jobs:
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           SERVERCHAN_SENDKEY: ${{ secrets.SERVERCHAN_SENDKEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.test_mode }}" = "true" ]; then
-            python main.py --test
+            python tool.py --test
           else
-            python main.py
+            python tool.py
           fi
 
       - name: 提交归档
@@ -52,5 +48,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add library/
-          git diff --staged --quiet || git commit -m "archive: $(TZ='Asia/Kuala_Lumpur' date +%Y-%m-%d) GitHub精选归档"
+          git diff --staged --quiet || git commit -m "archive: $(TZ='Asia/Kuala_Lumpur' date +%Y-%m-%d) 工具卡归档"
           git push

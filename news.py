@@ -289,6 +289,15 @@ def main():
     print(f"\n📲 第三步：推送到微信...")
     push_to_wechat(ai_content, test_mode=test_mode, is_morning=is_morning)
 
+    # 归档
+    print("\n📁 归档...")
+    try:
+        from archive import save
+        cat = "新闻早报" if is_morning else "新闻晚报"
+        save(cat, ai_content)
+    except ImportError:
+        pass
+
     print(f"\n✅ 新闻{period}推送完成")
 
 

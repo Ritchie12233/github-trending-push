@@ -371,6 +371,12 @@ def main():
 
         print("\n📲 第三步：推送到微信...")
         push_to_wechat(ai_content, test_mode=test_mode)
+        print("\n📁 归档...")
+        try:
+            from archive import save
+            save("本周汇总", ai_content)
+        except ImportError:
+            pass
         print(f"\n✅ {dn}汇总推送完成")
         return
 
@@ -387,6 +393,12 @@ def main():
 
     print("\n📲 第三步：推送到微信...")
     push_to_wechat(ai_content, test_mode=test_mode)
+    print("\n📁 归档...")
+    try:
+        from archive import save
+        save("GitHub精选", ai_content)
+    except ImportError:
+        pass
     print(f"\n✅ {dn}推送完成")
 
 
