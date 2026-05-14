@@ -55,9 +55,22 @@ for category, items in CONCEPTS.items():
 
 
 def get_today_concept():
-    """按日期索引选取今日概念，确保不重复"""
-    idx = datetime.now(KL_TZ).toordinal() % len(FLAT_CONCEPTS)
-    return FLAT_CONCEPTS[idx]
+    """按日期索引选取今日概念，跳过今日已推送的"""
+    try:
+        from archive import get_today_concepts
+        done = get_today_concepts()
+    except ImportError:
+        done = []
+
+    # 从日期索引开始找，跳过今天已推送的
+    base = datetime.now(KL_TZ).toordinal()
+    for offset in range(len(FLAT_CONCEPTS)):
+        idx = (base + offset) % len(FLAT_CONCEPTS)
+        category, concept = FLAT_CONCEPTS[idx]
+        if concept not in done:
+            return (category, concept)
+    # 全部轮过了（极端情况），返回日期默认
+    return FLAT_CONCEPTS[base % len(FLAT_CONCEPTS)]
 
 
 def call_deepseek(category, concept):

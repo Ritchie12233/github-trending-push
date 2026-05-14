@@ -204,7 +204,15 @@ def call_deepseek_news(articles, is_morning):
 [1-2条对马来西亚中国留学生/数据科学研究生可能有直接影响的新闻或提醒]
 """
 
-    user_prompt = f"请为 {today_str} 筛选并生成新闻简报。原始新闻池（英文为主）：\n\n{json.dumps(articles, ensure_ascii=False, indent=2)}"
+    # 读取近期已报道标题，避免重复
+    try:
+        from archive import get_recent_news_headlines
+        recent_hls = get_recent_news_headlines(days=2)
+        exclusion = f"\n\n⚠️ 以下新闻近期已报道过，今天请勿重复选择：\n{json.dumps(recent_hls, ensure_ascii=False)}" if recent_hls else ""
+    except ImportError:
+        exclusion = ""
+
+    user_prompt = f"请为 {today_str} 筛选并生成新闻简报。原始新闻池（英文为主）：\n\n{json.dumps(articles, ensure_ascii=False, indent=2)}{exclusion}"
 
     return _call_deepseek(system_prompt, user_prompt, max_tokens=5120)
 

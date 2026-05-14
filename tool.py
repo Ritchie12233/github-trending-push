@@ -70,8 +70,20 @@ for cat, items in TOOLS.items():
 
 
 def get_today_tool():
-    idx = datetime.now(KL_TZ).toordinal() % len(FLAT_TOOLS)
-    return FLAT_TOOLS[idx]
+    """按日期索引选取，跳过今日已推送的"""
+    try:
+        from archive import get_today_tools
+        done = get_today_tools()
+    except ImportError:
+        done = []
+
+    base = datetime.now(KL_TZ).toordinal()
+    for offset in range(len(FLAT_TOOLS)):
+        idx = (base + offset) % len(FLAT_TOOLS)
+        category, name, desc = FLAT_TOOLS[idx]
+        if name not in done:
+            return (category, name, desc)
+    return FLAT_TOOLS[base % len(FLAT_TOOLS)]
 
 
 def call_deepseek(category, name, description):

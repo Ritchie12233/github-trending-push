@@ -194,10 +194,18 @@ def call_deepseek_weekday(repos):
 💬 为什么推荐：[1句话]
 """
 
+    # 读取最近已推荐项目，避免重复
+    try:
+        from archive import get_recent_github_repos
+        recent = get_recent_github_repos(days=5)
+        exclusion = f"\n\n⚠️ 以下项目过去5天内已推荐过，今天请务必不要推荐：\n{json.dumps(recent, ensure_ascii=False)}" if recent else ""
+    except ImportError:
+        exclusion = ""
+
     today_str = datetime.now(KL_TZ).strftime("%Y年%m月%d日") + " " + day_name(get_day_of_week())
     user_prompt = f"""请为 {today_str} 筛选5个项目（3 AI/DS + 1 CS基础 + 1 破圈）。
 项目池如下：
-{json.dumps(repos, ensure_ascii=False, indent=2)}"""
+{json.dumps(repos, ensure_ascii=False, indent=2)}{exclusion}"""
 
     return _call_deepseek_api(system_prompt.replace("{date}", today_str), user_prompt)
 
